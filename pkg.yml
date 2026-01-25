@@ -1,0 +1,19 @@
+#
+
+pkg.name: pinekicker
+pkg.type: app
+pkg.description: "Pinekicker bootloader"
+pkg.author: "Gergely Gati"
+pkg.homepage: "https://github.com/gega/pinekicker"
+pkg.keywords:
+    - bootloader
+
+pkg.cflags:
+    - "-DPINEKICKER_MYNEWT=1"
+
+pkg.include_dirs:
+
+pkg.deps:
+    - "@apache-mynewt-core/hw/mcu/nordic/nrf52xxx"
+    - "@apache-mynewt-core/sys/log/stub"
+    - "@apache-mynewt-core/sys/console/stub"
