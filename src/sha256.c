@@ -1,3 +1,8 @@
+/*
+ * Copyright 2025 Philippe Lucidarme
+ *
+ * https://lucidar.me/en/dev-c-cpp/sha-256-in-c-cpp/
+ */
 #include "sha256.h"
 
 
