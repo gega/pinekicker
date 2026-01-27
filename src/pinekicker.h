@@ -52,6 +52,7 @@ struct PACKED slot_header {
     uint32_t status;
     uint32_t vtor_offset;
     uint32_t length;
+    uint32_t load_addr;
     uint8_t  signature[64];
 };
 
