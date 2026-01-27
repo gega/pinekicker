@@ -100,7 +100,8 @@ dd if="$TMPPTC" of="$TMPOUT" bs=1 seek="$PATCHOFFSET" conv=notrunc status=none
 [ $? -eq 0 ] || { echo "Patching binary failed"; exit 1; }
 
 # rename result to final output
-mv "$TMPOUT" "$OUT"
+OUTNAME=$(dirname "$OUT")"/"$(basename "$OUT" .bin)"_0x"${ADDR}".bin"
+mv "$TMPOUT" "$OUTNAME"
 
 # remove temps
 rm -f "$TMPSHA" "$TMPDER" "$TMPSIG" "$TMPOUT" "$TMPPTC"
