@@ -23,9 +23,9 @@ TMPOUT=$(mktemp)
 TMPPTC=$(mktemp)
 
 # get real load address
-arm-none-eabi-readelf -s bin/targets/dcw-pinetime/app/apps/dcw/dcw.elf|grep -q __image_load_addr
+arm-none-eabi-readelf -s "$ELF"|grep -q __image_load_addr
 if [ $? -eq 0 ]; then
-  ADDR=$(printf "%x\n" 0x$(arm-none-eabi-readelf -s bin/targets/dcw-pinetime/app/apps/dcw/dcw.elf|grep __image_load_addr|grep GLOBAL|awk '{print $2}'))
+  ADDR=$(printf "%x\n" 0x$(arm-none-eabi-readelf -s "$ELF"|grep __image_load_addr|grep GLOBAL|awk '{print $2}'))
 else
   echo "Warning: no linker symbol '__image_load_addr' found, fallback to autodetect load address!"
   ADDR=$(printf "%x" $(arm-none-eabi-readelf -W -l "$ELF" | awk '$1=="LOAD" && $8 ~ /E/ { print $3; exit }'))
@@ -93,7 +93,7 @@ if [ $HDROFF -gt 4096 ]; then
   echo "Header not found in the first 4k"
   exit 1
 fi
-PATCHOFFSET=$(($HDROFF + 32)) # based on pinekicker.h struct slot_header
+PATCHOFFSET=$(($HDROFF + 16)) # based on pinekicker.h struct slot_header
 
 # apply patchfile
 dd if="$TMPPTC" of="$TMPOUT" bs=1 seek="$PATCHOFFSET" conv=notrunc status=none

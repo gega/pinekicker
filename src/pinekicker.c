@@ -71,10 +71,10 @@ __attribute__((section(".ramfunc"))) int write_mcu_flash(uintptr_t addr, const u
   {
     uint32_t word = *(uint32_t *)(data + i);
     *((volatile uint32_t *)(addr+base_addr) + i/4) = word;
-    while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+///    while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
   }
   NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Ren;
-  while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+///  while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
 
   return(0);
 }
@@ -84,6 +84,19 @@ int write_mcu_flash(uintptr_t addr, const uint8_t *data, int32_t len)
   glob_flash_writes++;
   return(0);
 }
+#endif
+
+#ifndef UNIT_TEST
+#include <nrf.h>
+static void protect_bootloader(void)
+{
+    // Protect flash blocks 0–5 (0x0000–0x6000)
+//    NRF_BPROT->CONFIG0 = 0x0000003F;
+    // Allow debugger to override protection
+//    NRF_BPROT->DISABLEINDEBUG = 1;
+}
+#else
+static void protect_bootloader(void){}
 #endif
 
 static const struct slot_header *find_slot_header(uintptr_t base)
@@ -113,9 +126,9 @@ const struct slot_header *choose_slot(const struct slot_header *a, const struct 
   const struct slot_header *s;
 
   s = pick_newest(a, b, SLOT_STATUS_NEW);
-  if(s) return(s);
+  if(s!=NULL) return(s);
 
-  return pick_newest(a, b, SLOT_STATUS_CONFIRMED);
+  return(pick_newest(a, b, SLOT_STATUS_CONFIRMED));
 }
 
 static bool verify_signature(uintptr_t slot_base, const struct slot_header *h)
@@ -125,22 +138,27 @@ static bool verify_signature(uintptr_t slot_base, const struct slot_header *h)
   static uint8_t buf[128];
   uint8_t sha256[SHA256_BYTES_SIZE];
   int i,valid;
+  static const uint8_t ff=0xff;
 
   // sha
   if(h==NULL) return(false);
   if(h->length<sizeof(struct slot_header)) return(false);
   sha256_init(&sha);
-  uint32_t offs_begin = ((uint8_t *)h) - data;
-  uint32_t offs_end   = offs_begin + sizeof(struct slot_header);
+  uint32_t offs_begin = ((uint8_t *)h) - data + offsetof(struct slot_header, status);
+  uint32_t offs_end   = ((uint8_t *)h) - data + sizeof(struct slot_header);
   uint32_t max_len    = SLOT_BASE_B - SLOT_BASE_A;
   if(   max_len<h->length
      || offs_begin>=h->length
      || offs_end>h->length
     ) return(false);
-  for(i=0;i<offs_begin;i+=1) 			sha256_append(&sha, &data[i], 1);
+  for(i=0;i<offs_end;i+=1)
+  {
+    if(i<offs_end) sha256_append(&sha, &data[i], 1);
+    else sha256_append(&sha, &ff, 1);
+  }
   for(i=offs_end;i<h->length;i+=sizeof(buf))
   {
-    size_t len = MIN(sizeof(buf), h->length - i);
+    size_t len = MIN(sizeof(buf), h->length-i);
     sha256_append(&sha, &data[i], len);
   }
   sha256_finalize_bytes(&sha, sha256);
@@ -148,7 +166,7 @@ static bool verify_signature(uintptr_t slot_base, const struct slot_header *h)
   // signature
   uECC_Curve curve = uECC_secp256r1();
   valid = uECC_verify(gg_pubkey, sha256, sizeof(sha256), h->signature, curve);
-  valid=1;
+  valid = 1;
   
   return(valid ? true : false);
 }
@@ -169,9 +187,17 @@ static void jump_to_app(uintptr_t slot_base, const struct slot_header *h)
 
     __set_MSP(vectors[0]);
     SCB->VTOR = slot_base;
+    __set_PSP(vectors[0]);
+    __set_CONTROL(0);
+//    __BKPT(0);
 
     entry_fn_t reset = (entry_fn_t)vectors[1];
-    reset();
+
+    __asm volatile (
+        "bx %0\n"
+        :
+        : "r" (reset)
+    );
 
     while(1);
 #else
@@ -184,9 +210,7 @@ static void fail_stale_testing(const struct slot_header *h)
   if(h && h->status == SLOT_STATUS_TESTING)
   {
     uint32_t failed = SLOT_STATUS_FAILED;
-    write_mcu_flash((uintptr_t)&h->status,
-     (uint8_t *)&failed, 
-     sizeof(failed));
+    write_mcu_flash((uintptr_t)&h->status, (uint8_t *)&failed,  sizeof(failed));
   }
 }
 
@@ -199,6 +223,8 @@ void boot_main(void)
   uint32_t *to   = &__ramfunc_start__;
   uint32_t *from = &__ramfunc_load_start__;
   while(from < &__ramfunc_load_end__) *to++ = *from++;
+
+  protect_bootloader();
 
   // search firmare slots
   const struct slot_header *ha = find_slot_header(SLOT_BASE_A);
@@ -216,9 +242,9 @@ void boot_main(void)
   {
     const struct slot_header *s = choose_slot(ha, hb);
 #ifndef UNIT_TEST
-    if(!s) while(1); // nothing bootable
+    if(s==NULL) while(1); // nothing bootable
 #else
-    if(!s) return;
+    if(s==NULL) return;
 #endif
 
     uintptr_t base = (s == ha) ? SLOT_BASE_A : SLOT_BASE_B;
@@ -237,7 +263,7 @@ void boot_main(void)
     if(s->status == SLOT_STATUS_NEW)
     {
       uint32_t status = SLOT_STATUS_TESTING;
-      write_mcu_flash((uintptr_t)&status, (uint8_t *)&status, sizeof(status));
+      write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&status, sizeof(status));
     }
 
     if((s->vtor_offset) >= (s->length-8))
