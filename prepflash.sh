@@ -47,12 +47,12 @@ break *0x$(printf "%x" "$RH2")
 
 commands 1
   printf "BLTST: SLOT 1\n"
-  quit
+  monitor quit
 end
 
 commands 2
   printf "BLTST: SLOT 2\n"
-  quit
+  monitor quit
 end
 
 continue
