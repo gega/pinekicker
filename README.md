@@ -144,6 +144,75 @@ User code is never executed.
 
 ---
 
+## Unit Tests
+
+The boot decision logic is covered by a **table-driven unit test framework** that runs entirely on the host.
+
+The test binary compiles the real bootloader logic directly and replaces hardware-specific behavior with test hooks.
+
+### `pinekicker_test`
+
+The unit test validates:
+
+* Slot selection logic
+* One way status transitions (`NEW`, `TESTING`, `CONFIRMED`, `FAILED`)
+* Version comparison rules
+* Number of flash writes performed
+* Slot header discovery within the scan limit
+* Signature verification logic (optional)
+
+The test matrix explicitly enumerates all meaningful combinations of:
+
+* Slot A/B status
+* Slot A/B version
+* Expected selected slot
+* Expected number of status updates
+* Whether a valid slot was found
+
+This ensures deterministic behavior for every supported state transition.
+
+---
+
+### Running the tests
+
+Build and run the decision logic tests:
+
+```
+gcc -o pinekicker_test -DUNIT_TEST src/pinekicker_test.c
+./pinekicker_test
+```
+
+This runs the full slot-selection test matrix and reports failures immediately.
+
+---
+
+### Signature verification tests
+
+`pinekicker_test` can also validate real, signed slot images produced by `postbuild.sh`.
+
+```
+./pinekicker_test 1fw_good_0x8000.bin 0fw_bad_0x9000.bin
+```
+
+Argument format:
+
+* First character: expected verification result
+
+  * `1` = signature must be valid
+  * `0` = signature must be invalid
+* Remaining characters: filename of the slot image
+
+Any number of images may be specified.
+
+This allows end-to-end verification of:
+
+* Hashing
+* Signature format
+* Public key usage
+* Header parsing
+
+---
+
 ## Dependencies
 
 Included in the repository:
@@ -178,5 +247,14 @@ Design choices:
 * No filesystem
 * No unnecessary peripherals
 * No boot graphics
+* **Deterministic behavior**
 
-The motivation is simple: a bootloader should make a decision and get out of the way.
+  * Every slot state combination has a defined outcome
+* **Minimal flash writes**
+
+  * Status updates are strictly bounded and verified
+* **No implicit recovery logic**
+
+  * All transitions are explicit and test-covered
+
+The concept is simple: a bootloader should make a decision and get out of the way.
