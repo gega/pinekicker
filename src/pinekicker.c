@@ -153,7 +153,7 @@ static bool verify_signature(uintptr_t slot_base, const struct slot_header *h)
     ) return(false);
   for(i=0;i<offs_end;i+=1)
   {
-    if(i<offs_end) sha256_append(&sha, &data[i], 1);
+    if(i<offs_begin) sha256_append(&sha, &data[i], 1);
     else sha256_append(&sha, &ff, 1);
   }
   for(i=offs_end;i<h->length;i+=sizeof(buf))
@@ -166,7 +166,6 @@ static bool verify_signature(uintptr_t slot_base, const struct slot_header *h)
   // signature
   uECC_Curve curve = uECC_secp256r1();
   valid = uECC_verify(gg_pubkey, sha256, sizeof(sha256), h->signature, curve);
-  valid = 1;
   
   return(valid ? true : false);
 }
@@ -249,16 +248,14 @@ void boot_main(void)
 
     uintptr_t base = (s == ha) ? SLOT_BASE_A : SLOT_BASE_B;
 
+#ifndef UNIT_TEST
     if(!verify_signature(base, s))
     {
       uint32_t failed = SLOT_STATUS_FAILED;
       write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&failed, sizeof(failed));
-#ifndef UNIT_TEST
       continue;
-#else
-      break;
-#endif
     }
+#endif
 
     if(s->status == SLOT_STATUS_NEW)
     {

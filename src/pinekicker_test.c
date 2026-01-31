@@ -137,7 +137,7 @@ const struct ut_pk utpk[]=
 };
 
 
-int main(void)
+int main(int argc, char **argv)
 {
   const int index[]={0, 5, ARR_MIN_SIZE-1, ARR_MIN_SIZE+1, -1 };
   int result,idx,ok;
@@ -193,6 +193,34 @@ int main(void)
       }
     }
     if(ok==j) printf("OK\n");
+  }
+
+  for(argv++;argc>1;argv++,argc--)
+  {
+    int len;
+    bool result;
+    uint8_t *slot;
+    const struct slot_header *hdr;
+    bool expected;
+    
+    expected=(argv[0][0]=='0'?false:true);
+    FILE *f=fopen(&argv[0][1],"rb");
+    if(f!=NULL)
+    {
+      fseek(f,0,SEEK_END);
+      len=ftell(f);
+      fseek(f,0,SEEK_SET);
+      slot=malloc(len);
+      SLOT_BASE_B=(uintptr_t)slot+len;
+      fread(slot,1,len,f);
+      hdr=find_slot_header((uintptr_t)slot);
+      result=verify_signature((uintptr_t)slot, hdr);
+      if(expected==result) printf("%s\tOK\n",&argv[0][1]);
+      else printf("%s\tFAIL\tresult=%d expected=%d\n",&argv[0][1],result?1:0,expected?1:0);\
+      free(slot);
+      fclose(f);
+    }
+    else printf("Cannot open slot image '%s'\n",&argv[0][1]);
   }
 
   return(0);
