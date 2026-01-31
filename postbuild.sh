@@ -1,7 +1,8 @@
 #!/bin/bash
-ELF=$1
-OUT=$2
-KEY=$3
+
+ELF=$1 # compiled application elf
+OUT=$2 # output binary basename
+KEY=$3 # signing key.pem
 
 if [ x"$OUT" == x"" ]; then
   OUT="out.bin"
