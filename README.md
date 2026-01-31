@@ -89,6 +89,9 @@ Notes:
 ### Linker Support
 
 For reproducible builds, defining ```__image_load_addr``` is preferred over relying on ELF program headers.
+```
+__image_load_addr = ADDR(.text);
+```
 
 ---
 
