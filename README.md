@@ -66,7 +66,7 @@ struct slot_header {
 
 Field offsets are fixed and must not change.
 
-### Initialization Rules
+### Initialization
 
 The application **must initialize**:
 
@@ -85,6 +85,10 @@ Notes:
 
 * The header does **not** need to be at a fixed offset, only within the first 4 KB.
 * `vtor_offset` is relative to the slot base address.
+
+### Linker Support
+
+For reproducible builds, defining ```__image_load_addr``` is preferred over relying on ELF program headers.
 
 ---
 
