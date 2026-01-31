@@ -31,7 +31,6 @@
 
 #include "sha256.h"
 
-//#define uECC_PLATFORM 3
 #include "uECC.h"
 #include "pinekicker.h"
 #include "pubkey.h"
@@ -71,10 +70,10 @@ __attribute__((section(".ramfunc"))) int write_mcu_flash(uintptr_t addr, const u
   {
     uint32_t word = *(uint32_t *)(data + i);
     *((volatile uint32_t *)(addr+base_addr) + i/4) = word;
-///    while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+    while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
   }
   NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Ren;
-///  while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+  while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
 
   return(0);
 }
@@ -188,7 +187,6 @@ static void jump_to_app(uintptr_t slot_base, const struct slot_header *h)
     SCB->VTOR = slot_base;
     __set_PSP(vectors[0]);
     __set_CONTROL(0);
-//    __BKPT(0);
 
     entry_fn_t reset = (entry_fn_t)vectors[1];
 
