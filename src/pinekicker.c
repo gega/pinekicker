@@ -165,7 +165,7 @@ static bool verify_signature(uintptr_t slot_base, const struct slot_header *h)
   
   // signature
   uECC_Curve curve = uECC_secp256r1();
-  valid = uECC_verify(gg_pubkey, sha256, sizeof(sha256), h->signature, curve);
+  valid = uECC_verify(pubkey, sha256, sizeof(sha256), h->signature, curve);
   
   return(valid ? true : false);
 }
