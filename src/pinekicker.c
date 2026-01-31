@@ -216,7 +216,12 @@ static void fail_stale_testing(const struct slot_header *h)
 
 void boot_main(void)
 {
-//__asm volatile("bkpt #0");
+  uint32_t reset_reas = 0;
+
+#ifndef UNIT_TEST
+  reset_reas = NRF_POWER->RESETREAS;
+  NRF_POWER->RESETREAS = reset_reas;
+#endif
 
   // copy ramfunc to ram
   uint32_t *to   = &__ramfunc_start__;
@@ -261,6 +266,16 @@ void boot_main(void)
     {
       uint32_t status = SLOT_STATUS_TESTING;
       write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&status, sizeof(status));
+    }
+
+    // NOTE: revisit fail_stale_testing() for this to work
+    if(s->status == SLOT_STATUS_TESTING)
+    {
+      if((reset_reas&(1L<<1))!=0)
+      {
+        uint32_t status = SLOT_STATUS_TESTING;
+        write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&status, sizeof(status));
+      }
     }
 
     if((s->vtor_offset) >= (s->length-8))
