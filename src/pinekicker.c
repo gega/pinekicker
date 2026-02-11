@@ -57,12 +57,15 @@ uint32_t __ramfunc_end__;
 
 typedef void (*entry_fn_t)(void);
 
+static int nrf_present=0;
+#define NRF_I_MAX (9999)
+
 
 #ifndef UNIT_TEST
 __attribute__((section(".ramfunc"))) int write_mcu_flash(uintptr_t addr, const uint8_t *data, int32_t len)
 {
   uintptr_t base_addr = 0;
-
+  
   if( addr != (addr&~3ul) || len != (len&~3ul) ) return(-1);
 
   NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Wen;
@@ -70,10 +73,10 @@ __attribute__((section(".ramfunc"))) int write_mcu_flash(uintptr_t addr, const u
   {
     uint32_t word = *(uint32_t *)(data + i);
     *((volatile uint32_t *)(addr+base_addr) + i/4) = word;
-    while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+    if(nrf_present) while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
   }
   NRF_NVMC->CONFIG = NVMC_CONFIG_WEN_Ren;
-  while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
+  if(nrf_present) while (NRF_NVMC->READY == NVMC_READY_READY_Busy);
 
   return(0);
 }
@@ -169,12 +172,14 @@ static bool verify_signature(uintptr_t slot_base, const struct slot_header *h)
   return(valid ? true : false);
 }
 
-static void jump_to_app(uintptr_t slot_base, const struct slot_header *h)
+static void
+#ifndef UNIT_TEST
+__attribute__((naked))
+#endif
+jump_to_app(uintptr_t slot_base, const struct slot_header *h)
 {
 #ifndef UNIT_TEST
-    uint32_t *vectors = (uint32_t *)(slot_base + h->vtor_offset);
-
-    __disable_irq();
+    volatile uint32_t *vtor = (uint32_t *)(slot_base + h->vtor_offset);
 
     SysTick->CTRL = 0;
     for(int i = 0; i < 8; i++)
@@ -183,18 +188,16 @@ static void jump_to_app(uintptr_t slot_base, const struct slot_header *h)
         NVIC->ICPR[i] = 0xFFFFFFFF;
     }
 
-    __set_MSP(vectors[0]);
-    SCB->VTOR = slot_base;
-    __set_PSP(vectors[0]);
-    __set_CONTROL(0);
+    SCB->VTOR = (uint32_t)vtor;
 
-    entry_fn_t reset = (entry_fn_t)vectors[1];
+    __DSB();
+    __ISB();
 
-    __asm volatile (
-        "bx %0\n"
-        :
-        : "r" (reset)
-    );
+    asm volatile (".syntax unified        \n"
+                  "    msr  msp, %0       \n"
+                  "    bx   %1            \n"
+                  :
+                  : "r" (vtor[0]), "r" (vtor[1]));
 
     while(1);
 #else
@@ -215,10 +218,14 @@ static void fail_stale_testing(const struct slot_header *h)
 void boot_main(void)
 {
   uint32_t reset_reas = 0;
+  int i;
 
 #ifndef UNIT_TEST
   reset_reas = NRF_POWER->RESETREAS;
   NRF_POWER->RESETREAS = reset_reas;
+
+  for(i=0; NRF_NVMC->READY == NVMC_READY_READY_Busy && i<NRF_I_MAX; i++) asm("nop");
+  if(i<NRF_I_MAX) nrf_present=1;
 #endif
 
   // copy ramfunc to ram
@@ -262,8 +269,8 @@ void boot_main(void)
 
     if(s->status == SLOT_STATUS_NEW)
     {
-      uint32_t status = SLOT_STATUS_TESTING;
-      write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&status, sizeof(status));
+      //FIXME: enable this: uint32_t status = SLOT_STATUS_TESTING;
+      //FIXME: enable this: write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&status, sizeof(status));
     }
 
     // NOTE: revisit fail_stale_testing() for this to work
