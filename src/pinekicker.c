@@ -231,7 +231,7 @@ static void fail_stale_testing(const struct slot_header *h)
 
 void boot_main(void)
 {
-  uint32_t reset_reas = 0;
+  uint32_t reset_reas = ~0;
   int i;
 
 #ifndef UNIT_TEST
@@ -258,8 +258,12 @@ void boot_main(void)
 #endif
 
   // set them fail if any of them still TESTING
-  fail_stale_testing(ha);
-  fail_stale_testing(hb);
+  if( reset_reas != 0 )
+  {
+    // only if reset reason wasn't clean power cycle
+    fail_stale_testing(ha);
+    fail_stale_testing(hb);
+  }
 
   while(1)
   {
@@ -283,18 +287,8 @@ void boot_main(void)
 
     if(s->status == SLOT_STATUS_NEW)
     {
-      //FIXME: enable this: uint32_t status = SLOT_STATUS_TESTING;
-      //FIXME: enable this: write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&status, sizeof(status));
-    }
-
-    // NOTE: revisit fail_stale_testing() for this to work
-    if(s->status == SLOT_STATUS_TESTING)
-    {
-      if((reset_reas&(1L<<1))!=0)
-      {
-        uint32_t status = SLOT_STATUS_TESTING;
-        write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&status, sizeof(status));
-      }
+      uint32_t status = SLOT_STATUS_TESTING;
+      write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&status, sizeof(status));
     }
 
     if((s->vtor_offset) >= (s->length-8))
