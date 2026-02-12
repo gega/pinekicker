@@ -29,6 +29,8 @@
 #include "core_cm4.h"
 #endif
 
+#include <assert.h>
+
 #include "sha256.h"
 
 #include "uECC.h"
@@ -172,14 +174,33 @@ static bool verify_signature(uintptr_t slot_base, const struct slot_header *h)
   return(valid ? true : false);
 }
 
-static void
 #ifndef UNIT_TEST
-__attribute__((naked))
+static void __attribute__((naked)) handover(volatile uint32_t *vtor)
+{
+  __set_FAULTMASK(0);
+  __set_PRIMASK(0);
+  __DSB();
+  __ISB();
+
+  asm volatile (".syntax unified        \n"
+                "    msr  msp, %0       \n"
+                "    bx   %1            \n"
+                :
+                : "r" (vtor[0]), "r" (vtor[1]));
+}
 #endif
-jump_to_app(uintptr_t slot_base, const struct slot_header *h)
+
+static void jump_to_app(uintptr_t slot_base, const struct slot_header *h)
 {
 #ifndef UNIT_TEST
+
+    assert(((slot_base + h->vtor_offset) & 0xFF) == 0);
+
     volatile uint32_t *vtor = (uint32_t *)(slot_base + h->vtor_offset);
+
+    assert((vtor[0] & 0x7) == 0);
+
+    __disable_irq();
 
     SysTick->CTRL = 0;
     for(int i = 0; i < 8; i++)
@@ -190,14 +211,7 @@ jump_to_app(uintptr_t slot_base, const struct slot_header *h)
 
     SCB->VTOR = (uint32_t)vtor;
 
-    __DSB();
-    __ISB();
-
-    asm volatile (".syntax unified        \n"
-                  "    msr  msp, %0       \n"
-                  "    bx   %1            \n"
-                  :
-                  : "r" (vtor[0]), "r" (vtor[1]));
+    handover(vtor);
 
     while(1);
 #else
