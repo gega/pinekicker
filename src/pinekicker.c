@@ -194,7 +194,7 @@ static void jump_to_app(uintptr_t slot_base, const struct slot_header *h)
 {
 #ifndef UNIT_TEST
 
-    assert(((slot_base + h->vtor_offset) & 0xFF) == 0);
+    assert(((slot_base + h->vtor_offset) & 0xff) == 0);
 
     volatile uint32_t *vtor = (uint32_t *)(slot_base + h->vtor_offset);
 
