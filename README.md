@@ -2,7 +2,7 @@
 
 **pinekicker** is a minimal, fast **XIP A/B bootloader** for ARM Cortex-M4 microcontrollers.
 
-The primary target is **PineTime (Nordic nRF52)**, but the design is generic and should work on other Nordic Cortex-M platforms with minimal effort.
+The primary target is **PineTime (Nordic nRF52)**, but the design is generic and should work on other Cortex-M platforms with minimal effort.
 
 The focus is on **fast boot**, **simple integration**, and **strong firmware authenticity guarantees**, without unnecessary features or peripherals.
 
