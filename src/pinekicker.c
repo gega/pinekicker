@@ -223,7 +223,7 @@ static void fail_stale_testing(const struct slot_header *h)
 {
   if(h && h->status == SLOT_STATUS_TESTING)
   {
-    uint32_t failed = SLOT_STATUS_FAILED;
+    uint32_t failed = SLOT_STATUS_STALE;
     write_mcu_flash((uintptr_t)&h->status, (uint8_t *)&failed,  sizeof(failed));
   }
 }
@@ -237,6 +237,7 @@ void boot_main(void)
 #ifndef UNIT_TEST
   reset_reas = NRF_POWER->RESETREAS;
   NRF_POWER->RESETREAS = reset_reas;
+  reset_reas &= ~(POWER_RESETREAS_RESETPIN_Msk | POWER_RESETREAS_SREQ_Msk | POWER_RESETREAS_OFF_Msk);
 
   for(i=0; NRF_NVMC->READY == NVMC_READY_READY_Busy && i<NRF_I_MAX; i++) asm("nop");
   if(i<NRF_I_MAX) nrf_present=1;
