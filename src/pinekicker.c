@@ -231,7 +231,7 @@ static void fail_stale_testing(const struct slot_header *h)
 
 void boot_main(void)
 {
-  uint32_t reset_reas = ~0;
+  uint32_t reset_reas = 0;
   int i;
 
 #ifndef UNIT_TEST
@@ -259,12 +259,8 @@ void boot_main(void)
 #endif
 
   // set them fail if any of them still TESTING
-  if( reset_reas != 0 )
-  {
-    // only if reset reason wasn't clean power cycle
-    fail_stale_testing(ha);
-    fail_stale_testing(hb);
-  }
+  fail_stale_testing(ha);
+  fail_stale_testing(hb);
 
   while(1)
   {

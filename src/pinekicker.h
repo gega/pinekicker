@@ -30,6 +30,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#define PINEKICKER_VERSION (3)
+
 #define SLOT_MAGIC 0x504B4B52u  // "PKKR"
 #define SLOT_SCAN_LIMIT 0x1000  // first 4k
 
