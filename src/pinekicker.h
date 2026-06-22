@@ -27,18 +27,26 @@
 #ifndef PINEKICKER_H
 #define PINEKICKER_H
 
+#define xstr(a) str(a)
+#define str(a) #a
+
 #include <stdint.h>
 #include <stdbool.h>
 
-#define PINEKICKER_VERSION (3)
+#define PINEKICKER_VERSION 2
+#define PINEKICKER_REVISION 1
+#define PINEKICKER_VERSION_MAGIC "$VER: "
+#define PINEKICKER_VERSION_STRING PINEKICKER_VERSION_MAGIC "pinekicker " xstr(PINEKICKER_VERSION) "." xstr(PINEKICKER_REVISION) "\0"
 
 #define SLOT_MAGIC 0x504B4B52u  // "PKKR"
 #define SLOT_SCAN_LIMIT 0x1000  // first 4k
 
 #define SLOT_STATUS_NEW         0xFFFFFFFFu
-#define SLOT_STATUS_TESTING     0xFFFFFF00u
+#define SLOT_STATUS_TESTING1    0xFFFFFFF0u
+#define SLOT_STATUS_TESTING2    0xFFFFFF00u
+#define SLOT_STATUS_TESTING3    0xFFFFF000u
 #define SLOT_STATUS_CONFIRMED   0xFFFF0000u
-#define SLOT_STATUS_STALE       0xFFF00000u
+#define SLOT_STATUS_STALE       0xFFFFC000u
 #define SLOT_STATUS_FAILED      0xFF000000u
 
 #ifndef UNIT_TEST

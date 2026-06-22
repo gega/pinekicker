@@ -60,6 +60,7 @@ uint32_t __ramfunc_end__;
 typedef void (*entry_fn_t)(void);
 
 static int nrf_present=0;
+static volatile __attribute__((used)) char verstag[]="\0" PINEKICKER_VERSION_STRING;
 #define NRF_I_MAX (9999)
 
 
@@ -90,19 +91,6 @@ int write_mcu_flash(uintptr_t addr, const uint8_t *data, int32_t len)
 }
 #endif
 
-#ifndef UNIT_TEST
-#include <nrf.h>
-static void protect_bootloader(void)
-{
-    // Protect flash blocks 0–5 (0x0000–0x6000)
-//    NRF_BPROT->CONFIG0 = 0x0000003F;
-    // Allow debugger to override protection
-//    NRF_BPROT->DISABLEINDEBUG = 1;
-}
-#else
-static void protect_bootloader(void){}
-#endif
-
 static const struct slot_header *find_slot_header(uintptr_t base)
 {
   for (uintptr_t off = 0; off < SLOT_SCAN_LIMIT; off += 4)
@@ -113,9 +101,9 @@ static const struct slot_header *find_slot_header(uintptr_t base)
   return(NULL);
 }
 
-static const struct slot_header *pick_newest(const struct slot_header *a, const struct slot_header *b, uint32_t want_status)
+static volatile const struct slot_header *pick_newest(volatile const struct slot_header *a, volatile const struct slot_header *b, uint32_t want_status)
 {
-  const struct slot_header *best = NULL;
+  volatile const struct slot_header *best = NULL;
 
   if(a && a->status == want_status) best = a;
   if(b && b->status == want_status
@@ -125,17 +113,23 @@ static const struct slot_header *pick_newest(const struct slot_header *a, const 
   return(best);
 }
 
-const struct slot_header *choose_slot(const struct slot_header *a, const struct slot_header *b)
+const volatile struct slot_header *choose_slot(volatile const struct slot_header *a, volatile const struct slot_header *b)
 {
-  const struct slot_header *s;
+  volatile const struct slot_header *s;
 
   s = pick_newest(a, b, SLOT_STATUS_NEW);
+  if(s!=NULL) return(s);
+  s = pick_newest(a, b, SLOT_STATUS_TESTING1);
+  if(s!=NULL) return(s);
+  s = pick_newest(a, b, SLOT_STATUS_TESTING2);
+  if(s!=NULL) return(s);
+  s = pick_newest(a, b, SLOT_STATUS_TESTING3);
   if(s!=NULL) return(s);
 
   return(pick_newest(a, b, SLOT_STATUS_CONFIRMED));
 }
 
-static bool verify_signature(uintptr_t slot_base, const struct slot_header *h)
+static bool verify_signature(uintptr_t slot_base, volatile const struct slot_header *h)
 {
   uint8_t *data=(uint8_t *)slot_base;
   struct sha256 sha;
@@ -169,7 +163,7 @@ static bool verify_signature(uintptr_t slot_base, const struct slot_header *h)
   
   // signature
   uECC_Curve curve = uECC_secp256r1();
-  valid = uECC_verify(pubkey, sha256, sizeof(sha256), h->signature, curve);
+  valid = uECC_verify(pubkey, sha256, sizeof(sha256), (const uint8_t *)h->signature, curve);
   
   return(valid ? true : false);
 }
@@ -190,7 +184,7 @@ static void __attribute__((naked)) handover(volatile uint32_t *vtor)
 }
 #endif
 
-static void jump_to_app(uintptr_t slot_base, const struct slot_header *h)
+static void jump_to_app(uintptr_t slot_base, volatile const struct slot_header *h)
 {
 #ifndef UNIT_TEST
 
@@ -219,16 +213,6 @@ static void jump_to_app(uintptr_t slot_base, const struct slot_header *h)
 #endif
 }
 
-static void fail_stale_testing(const struct slot_header *h)
-{
-  if(h && h->status == SLOT_STATUS_TESTING)
-  {
-    uint32_t failed = SLOT_STATUS_STALE;
-    write_mcu_flash((uintptr_t)&h->status, (uint8_t *)&failed,  sizeof(failed));
-  }
-}
-
-
 void boot_main(void)
 {
   uint32_t reset_reas = 0;
@@ -248,23 +232,17 @@ void boot_main(void)
   uint32_t *from = &__ramfunc_load_start__;
   while(from < &__ramfunc_load_end__) *to++ = *from++;
 
-  protect_bootloader();
-
   // search firmare slots
-  const struct slot_header *ha = find_slot_header(SLOT_BASE_A);
-  const struct slot_header *hb = find_slot_header(SLOT_BASE_B);
+  volatile const struct slot_header *ha = find_slot_header(SLOT_BASE_A);
+  volatile const struct slot_header *hb = find_slot_header(SLOT_BASE_B);
 #ifdef UNIT_TEST
   if(ha!=NULL) glob_found++;
   if(hb!=NULL) glob_found++;
 #endif
 
-  // set them fail if any of them still TESTING
-  fail_stale_testing(ha);
-  fail_stale_testing(hb);
-
   while(1)
   {
-    const struct slot_header *s = choose_slot(ha, hb);
+    volatile const struct slot_header *s = choose_slot(ha, hb);
 #ifndef UNIT_TEST
     if(s==NULL) while(1); // nothing bootable
 #else
@@ -284,8 +262,23 @@ void boot_main(void)
 
     if(s->status == SLOT_STATUS_NEW)
     {
-      uint32_t status = SLOT_STATUS_TESTING;
-      write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&status, sizeof(status));
+      uint32_t testing = SLOT_STATUS_TESTING1;
+      write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&testing, sizeof(testing));
+    }
+    else if(s->status == SLOT_STATUS_TESTING1)
+    {
+      uint32_t testing = SLOT_STATUS_TESTING2;
+      write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&testing, sizeof(testing));
+    }
+    else if(s->status == SLOT_STATUS_TESTING2)
+    {
+      uint32_t testing = SLOT_STATUS_TESTING3;
+      write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&testing, sizeof(testing));
+    }
+    else if(s->status == SLOT_STATUS_TESTING3)
+    {
+      uint32_t testing = SLOT_STATUS_STALE;
+      write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&testing, sizeof(testing));
     }
 
     if((s->vtor_offset) >= (s->length-8))
