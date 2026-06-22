@@ -60,7 +60,7 @@ uint32_t __ramfunc_end__;
 typedef void (*entry_fn_t)(void);
 
 static int nrf_present=0;
-static volatile __attribute__((used)) char verstag[]="\0" PINEKICKER_VERSION_STRING;
+volatile __attribute__((used)) char verstag[]="\0" PINEKICKER_VERSION_STRING;
 #define NRF_I_MAX (9999)
 
 
