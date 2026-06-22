@@ -60,8 +60,8 @@ uint32_t __ramfunc_end__;
 typedef void (*entry_fn_t)(void);
 
 static int nrf_present=0;
+const char verstag[]="\0" PINEKICKER_VERSION_STRING;
 
-__attribute__((section(".ramfunc"), used)) char verstag[]="\0" PINEKICKER_VERSION_STRING;
 #define NRF_I_MAX (9999)
 
 
@@ -217,13 +217,13 @@ static void jump_to_app(uintptr_t slot_base, volatile const struct slot_header *
 void boot_main(void)
 {
   uint32_t reset_reas = 0;
-  int i;
+  int i=0;
 
 #ifndef UNIT_TEST
   reset_reas = NRF_POWER->RESETREAS;
   NRF_POWER->RESETREAS = reset_reas;
   reset_reas &= ~(POWER_RESETREAS_RESETPIN_Msk | POWER_RESETREAS_SREQ_Msk | POWER_RESETREAS_OFF_Msk);
-
+  
   for(i=0; NRF_NVMC->READY == NVMC_READY_READY_Busy && i<NRF_I_MAX; i++) asm("nop");
   if(i<NRF_I_MAX) nrf_present=1;
 #endif
@@ -257,7 +257,9 @@ void boot_main(void)
     {
       uint32_t failed = SLOT_STATUS_FAILED;
       write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&failed, sizeof(failed));
-      continue;
+      for(i=1;verstag[i]!='\0';i++) if(((const char *)&s)[i]!=verstag[i]) break;
+      if(verstag[i]=='\0') continue;
+      NVIC_SystemReset();
     }
 #endif
 
