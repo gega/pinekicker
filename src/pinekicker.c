@@ -92,9 +92,10 @@ int write_mcu_flash(uintptr_t addr, const uint8_t *data, int32_t len)
 }
 #endif
 
-static int set_slot_status(volatile const uint32_t *status, uint32_t desired)
+static int set_slot_status(volatile const uintptr_t status, uint32_t desired)
 {
-    uint32_t current = *status;
+    if((status&4)!=0) return(-1);
+    uint32_t current = *((uint32_t *)status);
     if ((current & desired) != desired) return(-1);
     uint32_t mask = desired | ~current; // write only new '0's
     return(write_mcu_flash((uintptr_t)status, (const uint8_t *)&mask, sizeof(mask)));
@@ -260,17 +261,17 @@ void boot_main(void)
 #ifndef UNIT_TEST
     if(!verify_signature(base, s))
     {
-      set_slot_status(&s->status, SLOT_STATUS_FAILED);
+      set_slot_status((uintptr_t)&s->status, SLOT_STATUS_FAILED);
       for(i=1;verstag[i]!='\0';i++) if(((const char *)&s)[i]!=verstag[i]) break;
       if(verstag[i]=='\0') continue;
       NVIC_SystemReset();
     }
 #endif
 
-    if(s->status == SLOT_STATUS_NEW)           set_slot_status(&s->status, SLOT_STATUS_TESTING1);
-    else if(s->status == SLOT_STATUS_TESTING1) set_slot_status(&s->status, SLOT_STATUS_TESTING2);
-    else if(s->status == SLOT_STATUS_TESTING2) set_slot_status(&s->status, SLOT_STATUS_TESTING3);
-    else if(s->status == SLOT_STATUS_TESTING3) set_slot_status(&s->status, SLOT_STATUS_STALE);
+    if(s->status == SLOT_STATUS_NEW)           set_slot_status((uintptr_t)&s->status, SLOT_STATUS_TESTING1);
+    else if(s->status == SLOT_STATUS_TESTING1) set_slot_status((uintptr_t)&s->status, SLOT_STATUS_TESTING2);
+    else if(s->status == SLOT_STATUS_TESTING2) set_slot_status((uintptr_t)&s->status, SLOT_STATUS_TESTING3);
+    else if(s->status == SLOT_STATUS_TESTING3) set_slot_status((uintptr_t)&s->status, SLOT_STATUS_STALE);
 
     if((s->vtor_offset) >= (s->length-8))
     {
