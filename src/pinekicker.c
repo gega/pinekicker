@@ -92,6 +92,14 @@ int write_mcu_flash(uintptr_t addr, const uint8_t *data, int32_t len)
 }
 #endif
 
+static int set_slot_status(volatile const uint32_t *status, uint32_t desired)
+{
+    uint32_t current = *status;
+    if ((current & desired) != desired) return(-1);
+    uint32_t mask = desired | ~current; // write only new '0's
+    return(write_mcu_flash((uintptr_t)status, (const uint8_t *)&mask, sizeof(mask)));
+}
+
 static const struct slot_header *find_slot_header(uintptr_t base)
 {
   for (uintptr_t off = 0; off < SLOT_SCAN_LIMIT; off += 4)
@@ -146,16 +154,13 @@ static bool verify_signature(uintptr_t slot_base, volatile const struct slot_hea
   uint32_t offs_begin = ((uint8_t *)h) - data + offsetof(struct slot_header, status);
   uint32_t offs_end   = ((uint8_t *)h) - data + sizeof(struct slot_header);
   uint32_t max_len    = SLOT_BASE_B - SLOT_BASE_A;
-  if(   max_len<h->length
-     || offs_begin>=h->length
-     || offs_end>h->length
-    ) return(false);
+  if( max_len<h->length || offs_begin>=h->length || offs_end>h->length ) return(false);
   for(i=0;i<offs_end;i+=1)
   {
     if(i<offs_begin) sha256_append(&sha, &data[i], 1);
     else sha256_append(&sha, &ff, 1);
   }
-  for(i=offs_end;i<h->length;i+=sizeof(buf))
+  for(i=offs_end; i<h->length; i+=sizeof(buf))
   {
     size_t len = MIN(sizeof(buf), h->length-i);
     sha256_append(&sha, &data[i], len);
@@ -255,34 +260,17 @@ void boot_main(void)
 #ifndef UNIT_TEST
     if(!verify_signature(base, s))
     {
-      uint32_t failed = SLOT_STATUS_FAILED;
-      write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&failed, sizeof(failed));
+      set_slot_status(&s->status, SLOT_STATUS_FAILED);
       for(i=1;verstag[i]!='\0';i++) if(((const char *)&s)[i]!=verstag[i]) break;
       if(verstag[i]=='\0') continue;
       NVIC_SystemReset();
     }
 #endif
 
-    if(s->status == SLOT_STATUS_NEW)
-    {
-      uint32_t testing = SLOT_STATUS_TESTING1;
-      write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&testing, sizeof(testing));
-    }
-    else if(s->status == SLOT_STATUS_TESTING1)
-    {
-      uint32_t testing = SLOT_STATUS_TESTING2;
-      write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&testing, sizeof(testing));
-    }
-    else if(s->status == SLOT_STATUS_TESTING2)
-    {
-      uint32_t testing = SLOT_STATUS_TESTING3;
-      write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&testing, sizeof(testing));
-    }
-    else if(s->status == SLOT_STATUS_TESTING3)
-    {
-      uint32_t testing = SLOT_STATUS_STALE;
-      write_mcu_flash((uintptr_t)&s->status, (uint8_t *)&testing, sizeof(testing));
-    }
+    if(s->status == SLOT_STATUS_NEW)           set_slot_status(&s->status, SLOT_STATUS_TESTING1);
+    else if(s->status == SLOT_STATUS_TESTING1) set_slot_status(&s->status, SLOT_STATUS_TESTING2);
+    else if(s->status == SLOT_STATUS_TESTING2) set_slot_status(&s->status, SLOT_STATUS_TESTING3);
+    else if(s->status == SLOT_STATUS_TESTING3) set_slot_status(&s->status, SLOT_STATUS_STALE);
 
     if((s->vtor_offset) >= (s->length-8))
     {
